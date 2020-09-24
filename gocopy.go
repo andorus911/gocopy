@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"github.com/cheggaaa/pb/v3"
 	"io"
 	"os"
 )
@@ -23,11 +23,26 @@ func Copy(from string, to string, offset int64, limit int64) error {
 		return err
 	}
 
-	written, err := io.CopyN(toFile, fromFile, limit)
+	if limit < 1 {
+		stat, err := fromFile.Stat()
+		if err != nil {
+			return err
+		}
+		limit = stat.Size()
+	}
+
+	reader := io.LimitReader(fromFile, limit)
+	tmpl := `{{ green "Copying:" }} {{ bar . "[" "=" ">" "-" | green}} {{speed . | green }} {{percent . | green}}`
+	bar := pb.ProgressBarTemplate(tmpl).Start64(limit)
+	bar.Set("my_green_string", "green").Set("my_blue_string", "blue")
+	barReader := bar.NewProxyReader(reader)
+
+	bar.Start()
+	_, err = io.Copy(toFile, barReader)
 	if err != nil && err != io.EOF {
 		return err
 	}
-	fmt.Println(written, "bytes were written.")
+	bar.Finish()
 
 	err = toFile.Close()
 	if err != nil {
